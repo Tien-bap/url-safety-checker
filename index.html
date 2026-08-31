@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Safety Checker</title>
+</head>
+<body>
+    <h1>URL Safety Checker</h1>
+    <form id="urlForm" onsubmit="event.preventDefault(); handleURLInput();">
+        <label for="urlInput">Enter a URL:</label>
+        <input type="text" id="urlInput" name="urlInput" required>
+        <button type="submit">Check Safety</button>
+    </form>
+    <div id="result"></div>
+    
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
