@@ -1,0 +1,29 @@
+
+name: Update Hashes
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # mỗi 6 giờ
+  workflow_dispatch:        # cho phép chạy thủ công
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - run: pip install requests
+
+      - run: python get_hashes.py
+
+      - name: Commit if changed
+        run: |
+          git config user.email "action@github.com"
+          git config user.name "GitHub Actions"
+          git add hashes.json
+          git diff --cached --quiet || git commit -m "update hashes $(date -u '+%Y-%m-%d %H:%M')"
+          git push
