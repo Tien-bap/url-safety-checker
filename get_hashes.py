@@ -11,6 +11,16 @@ FEEDS = [
         "url": "https://urlhaus.abuse.ch/downloads/text/",
         "type": "text"
     },
+    {
+        "name": "Abuse.ch SSLBL",
+        "url": "https://sslbl.abuse.ch/blacklist/sslipblacklist.txt",
+        "type": "text"
+    },
+    {
+        "name": "Botvrij",
+        "url": "https://www.botvrij.eu/data/ioclist.url.raw",
+        "type": "text"
+    },
 ]
 
 def fetch_text_feed(url):
