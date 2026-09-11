@@ -1,23 +1,31 @@
 <!DOCTYPE html>
 
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>URL Safety Checker</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>URL Safety Checker</h1>
-    <form id="urlForm" onsubmit="event.preventDefault(); handleURLInput();">
-        <label for="urlInput">Enter a URL:</label>
-        <input type="text" id="urlInput" name="urlInput" required>
-        <button type="submit">Check Safety</button>
-    </form>
-    <div id="result"></div>
+    <main>
+        <span class="eyebrow">URL Safety Checker</span>
+        <h1>Kiểm tra một đường dẫn trước khi bạn mở nó.</h1>
+        <form id="urlForm" class="checker-form" onsubmit="event.preventDefault(); handleURLInput();">
+            <input type="text" id="urlInput" name="urlInput" placeholder="https://example.com" aria-label="URL cần kiểm tra" required>
+            <button type="submit">Kiểm tra URL</button>
+        </form>
+        <div id="result" aria-live="polite"></div>
+    </main>
     
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+
+    <script src="extract-static.js"></script>
+    <script src="extract-domain.js"></script>
+    <script src="extract-url.js"></script>
+
     <script src="script.js"></script>
 </body>
 

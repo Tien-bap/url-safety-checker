@@ -1,16 +1,20 @@
 // ==================== INIT ====================
 let hash_map = null;
-let mlSession = null;
+let domainSession = null;
+let urlSession = null;
 
 window.onload = async function() {
     try {
-        const [hashResult, session] = await Promise.all([
+        const [hashResult, dSession, uSession] = await Promise.all([
             fetch('hashes.json'),
-            ort.InferenceSession.create('model_lgbm.onnx')
+            ort.InferenceSession.create('./models/model_lgbm_domain.onnx'),
+            ort.InferenceSession.create('./models/model_lgbm_url.onnx')
+            
         ]);
         hash_map = await hashResult.json();
-        mlSession = session;
-        console.log("Loaded", Object.keys(hash_map).length, "prefixes");
+        domainSession = dSession;
+        urlSession = uSession;
+        console.log("Loaded", Object.keys(hash_map).length, "prefixes + 2 ONNX models");
     } catch (err) {
         console.error('Load failed:', err);
     }
@@ -18,13 +22,13 @@ window.onload = async function() {
 
 // ==================== MAIN ====================
 function handleURLInput() {
-    if (!hash_map || !mlSession) {
-        showResult("ĐANG TẢI", "Vui lòng thử lại sau giây lát", [], null);
+    if (!hash_map || !urlSession || !domainSession) {
+        showResult({ verdict: "ĐANG TẢI", reason: "Vui lòng thử lại sau giây lát" });
         return;
     }
     const url = document.getElementById('urlInput').value.trim();
     if (!url) {
-        showResult("KHÔNG HỢP LỆ", "Vui lòng nhập URL", [], null);
+        showResult({ verdict: "KHÔNG HỢP LỆ", reason: "Vui lòng nhập URL" });
         return;
     }
     checkURL(url);
@@ -32,15 +36,12 @@ function handleURLInput() {
 
 async function checkURL(url) {
     let inBlacklist = false;
-    let flags = [];
-    let mlResult = null;
 
     // LỚP 1: Blacklist
     const hash_url = sha256(url);
     const prefix = hash_url.slice(0, 8);
     if (hash_map.hasOwnProperty(prefix)) {
-        const bucket = hash_map[prefix];
-        if (bucket.includes(hash_url)) {
+        if (hash_map[prefix].includes(hash_url)) {
             inBlacklist = true;
         }
     }
@@ -48,27 +49,46 @@ async function checkURL(url) {
     // LỚP 2: Phân tích tĩnh
     const features = extractFeatures(url);
     if (!features) {
-        showResult("KHÔNG HỢP LỆ", "URL không hợp lệ", [], null);
+        showResult({ verdict: "KHÔNG HỢP LỆ", reason: "URL không hợp lệ", url });
         return;
     }
-    flags = staticAnalysis(features);
+    const flags = staticAnalysis(features);
 
-    // LỚP 3: ML
-    const mlFeatures = extractMLFeatures(url);
-    if (mlFeatures) {
-        mlResult = await predictWithONNX(mlFeatures);
-    }
+    // LỚP 3: ML — Domain model + URL model
+    const domainFeatures = extractDomainMLFeatures(url);
+    const urlFeatures = extractMLFeatures(url);
 
-    // Tổng hợp kết quả
-    const mlIsDangerous = mlResult && mlResult.label === 0;
+    const domainResult = await predictWithSession(domainSession, domainFeatures, 26);
+    const urlResult = await predictWithSession(urlSession, urlFeatures, 40);
+
+    // Static analysis 
+    const riskScore = calculateRiskScore(domainResult, urlResult);
+    const isDangerousByModel = riskScore !== null && riskScore >= 0.5;
 
     if (inBlacklist) {
-        showResult("NGUY HIỂM", "Có trong blacklist", flags, mlResult);
-    } else if (flags.length > 0 || mlIsDangerous) {
-        showResult("NGUY HIỂM", "Phát hiện dấu hiệu nguy hiểm", flags, mlResult);
+        showResult({
+            verdict: "NGUY HIỂM",
+            reason: "URL có trong blacklist",
+            flags, domainResult, urlResult, riskScore, url, inBlacklist
+        });
+    } else if (isDangerousByModel) {
+        showResult({
+            verdict: "NGUY HIỂM",
+            reason: "Điểm rủi ro từ mô hình vượt ngưỡng 50%",
+            flags, domainResult, urlResult, riskScore, url, inBlacklist
+        });
     } else {
-        showResult("AN TOÀN", "Không phát hiện dấu hiệu nguy hiểm", [], mlResult);
+        showResult({
+            verdict: "AN TOÀN",
+            reason: "Điểm rủi ro từ mô hình dưới ngưỡng 50%",
+            flags, domainResult, urlResult, riskScore, url, inBlacklist
+        });
     }
+}
+
+function calculateRiskScore(domainResult, urlResult) {
+    if (!domainResult || !urlResult) return null;
+    return (urlResult.probPhishing * 0.7) + (domainResult.probPhishing * 0.3);
 }
 
 // ==================== SHA256 ====================
@@ -77,16 +97,13 @@ function sha256(text) {
 }
 
 // ==================== ONNX ====================
-async function predictWithONNX(features) {
-    if (!mlSession) return null;
-    const input = new ort.Tensor('float32', Float32Array.from(features), [1, 35]);
-    
+async function predictWithSession(session, features, nFeatures) {
+    if (!session || !features) return null;
     try {
-        const output = await mlSession.run({ float_input: input });
-
-        const label = Number(output.label.data[0]); // BigInt → Number
-        const probs = output.probabilities.data;     // Float32Array
-
+        const input = new ort.Tensor('float32', Float32Array.from(features), [1, nFeatures]);
+        const output = await session.run({ float_input: input });
+        const label = Number(output.label.data[0]);
+        const probs = output.probabilities.data;
         return {
             label,
             name: label === 0 ? 'Phishing' : 'Safe',
@@ -100,256 +117,60 @@ async function predictWithONNX(features) {
 }
 
 // ==================== SHOW RESULT ====================
-function showResult(verdict, reason, flags, mlResult) {
-    const verdictColor = verdict === 'AN TOÀN' ? 'green' : verdict === 'ĐÁNG NGỜ' ? 'orange' : 'red';
-
+function showResult({ verdict, reason, flags = [], domainResult, urlResult, riskScore, url, inBlacklist = false }) {
+    const isSafe = verdict === 'AN TOÀN';
+    const result = document.getElementById('result');
+    const scoreText = riskScore === null ? 'Không đủ dữ liệu' : `${(riskScore * 100).toFixed(1)}%`;
+    const scoreWidth = riskScore === null ? 0 : Math.min(riskScore * 100, 100);
     const flagsHTML = flags.length > 0
-        ? `<p>Phân tích tĩnh: ${flags.join(', ')}</p>`
-        : `<p>Phân tích tĩnh: Không phát hiện</p>`;
+        ? flags.map(flag => `<li>${escapeHTML(flag)}</li>`).join('')
+        : '<li>Không phát hiện dấu hiệu đặc biệt</li>';
 
-    const mlHTML = mlResult
-        ? `<p>ML: ${mlResult.name} (Phishing: ${(mlResult.probPhishing * 100).toFixed(1)}% | Safe: ${(mlResult.probSafe * 100).toFixed(1)}%)</p>`
-        : '';
-
-    const blacklistHTML = reason === 'Có trong blacklist'
-        ? `<p>Blacklist: Có trong danh sách đen</p>`
-        : '';
-
-    document.getElementById('result').innerHTML = `
-        <strong style="color:${verdictColor}">${verdict}</strong>
-        ${blacklistHTML}
-        ${flagsHTML}
-        ${mlHTML}
+    result.className = `result-card ${isSafe ? 'is-safe' : 'is-danger'}`;
+    result.innerHTML = `
+        <div class="result-header">
+            <div>
+                <span class="result-kicker">KẾT QUẢ ĐÁNH GIÁ</span>
+                <h2>${escapeHTML(verdict)}</h2>
+                <p class="result-reason">${escapeHTML(reason)}</p>
+            </div>
+            <div class="status-mark" aria-hidden="true">${isSafe ? '✓' : '!'}</div>
+        </div>
+        <div class="checked-url">${escapeHTML(url)}</div>
+        <section class="risk-panel">
+            <div class="risk-heading">
+                <span>Điểm rủi ro tổng hợp</span>
+                <strong>${scoreText}</strong>
+            </div>
+            <div class="risk-track"><span style="width:${scoreWidth}%"></span></div>
+            <small>70% mô hình URL + 30% mô hình domain${inBlacklist ? ' · Hash blacklist: khớp tuyệt đối' : ''}</small>
+        </section>
+        <div class="model-grid">
+            ${modelCard('Mô hình URL', urlResult)}
+            ${modelCard('Mô hình domain', domainResult)}
+        </div>
+        <details class="static-details">
+            <summary>Phân tích tĩnh (${flags.length} dấu hiệu)</summary>
+            <ul>${flagsHTML}</ul>
+        </details>
     `;
 }
 
-function staticAnalysis(features) {
-    if (features.trusted) return [];
- 
-    const flags = [];
- 
-    // Lexical
-    if (features.urlLength > 100) flags.push("URL quá dài");
-    if (features.domainDashCount >= 4) flags.push("Quá nhiều dấu gạch ngang trong domain");
-    if (features.subdomainCount > 2) flags.push("Quá nhiều subdomain");
-    if (features.encodedCharCount > 5) flags.push("Nhiều ký tự encoded trong path");
- 
-    // Domain
-    if (features.isIP) flags.push("Dùng IP thay domain");
-    if (features.hasSuspiciousTLD) flags.push("TLD đáng ngờ");
-    if (features.brandInSubdomain) flags.push("Brand name trong subdomain");
-    if (features.brandDotCom) flags.push("Giả mạo brand kiểu brand.com.xx");
-    if (features.hasSuspiciousWord) flags.push("Chứa từ nhạy cảm trong domain");
-    if (features.hasRepeatedChars) flags.push("Domain có ký tự lặp bất thường");
-    if (features.isNumericDomain) flags.push("Domain toàn số");
-    if (features.consonantGroups > 0) flags.push("Domain chứa chuỗi ký tự vô nghĩa");
- 
-    // Platform + random domain
-    if (features.isOnSuspiciousPlatform && features.consonantGroups > 0)
-        flags.push("Domain random trên platform miễn phí");
-    if (features.isOnSuspiciousPlatform && features.domainDashCount >= 3)
-        flags.push("Domain random trên platform miễn phí");
- 
-    // Structure
-    if (!features.isHTTPS) flags.push("Không dùng HTTPS");
-    if (features.hasAt) flags.push("Có ký tự @ trong URL");
-    if (features.hasPort) flags.push("Dùng port bất thường");
-    if (features.hasDoubleSlash) flags.push("Có // trong path");
-    if (features.hasRedirectParam) flags.push("Có redirect parameter");
- 
-    return flags;
-}
- 
-
-function extractFeatures(url) {
-    let parsed;
-    try { parsed = new URL(url); }
-    catch { return null; }
- 
-    const domain = parsed.hostname;
-    const path = parsed.pathname;
-    const query = parsed.search;
-    const fullURL = url;
-    const originAndPath = parsed.origin + parsed.pathname;
- 
-    // Whitelist TLD tin cậy
-    const trustedTLDs = ['.edu.vn', '.gov.vn', '.edu', '.gov', '.ac.uk', '.ac.jp'];
-    if (trustedTLDs.some(t => domain.endsWith(t))) return { trusted: true };
- 
-    // --- Lexical ---
-    const urlLength = originAndPath.length;
-    const domainLength = domain.length;
-    const pathLength = path.length;
-    const digitCount = (fullURL.match(/\d/g) || []).length;
-    const digitRatio = digitCount / (fullURL.length || 1);
-    const dotCount = (domain.match(/\./g) || []).length;
-    const domainDashCount = (domain.match(/-/g) || []).length;
-    const underscoreCount = (domain.match(/_/g) || []).length;
-    const atCount = (fullURL.match(/@/g) || []).length;
-    const queryParamCount = query ? query.split('&').length : 0;
-    const encodedCharCount = (path.match(/%[0-9a-fA-F]{2}/g) || []).length;
- 
-    // --- Domain ---
-    const subdomains = domain.split('.');
-    const subdomainCount = subdomains.length - 2;
-    const domainMainPart = subdomains[subdomains.length - 2] || '';
- 
-    const extendedSuspiciousTLDs = [
-        '.tk', '.ml', '.ga', '.cf', '.gq',
-        '.xyz', '.top', '.club', '.sbs', '.cfd',
-        '.click', '.casa', '.vip', '.love', '.ink',
-        '.lk', '.cn', '.ru', '.bz'
-    ];
-    const hasSuspiciousTLD = extendedSuspiciousTLDs.some(t => domain.endsWith(t)) ? 1 : 0;
-    const isIP = /^\d+\.\d+\.\d+\.\d+$/.test(domain) ? 1 : 0;
- 
-    const brands = ['paypal', 'google', 'facebook', 'meta', 'apple', 
-                 'amazon', 'microsoft', 'bank', 'roblox', 'ledger', 
-                 'trezor', 'binance', 'netflix', 'instagram', 'steam', 'spotify'];
-    const brandInSubdomain = (subdomainCount > 0 && brands.some(b => subdomains[0].includes(b))) ? 1 : 0;
-    const brandDotCom = brands.some(b => domain.includes(b + '.com.')) ? 1 : 0;
- 
-    const suspiciousWords = ['login', 'secure', 'verify', 'update', 'confirm', 'signin'];
-    const hasSuspiciousWord = suspiciousWords.some(w => domain.toLowerCase().includes(w)) ? 1 : 0;
- 
-    // Platform miễn phí bị lạm dụng
-    const suspiciousPlatforms = [
-        'pages.dev', 'vercel.app', 'replit.app', 'netlify.app',
-        'github.io', 'blogspot.com', 'weebly.com', 'surge.sh',
-        'workers.dev', 'framer.website', 'framer.app', 'glitch.me'
-    ];
-    const isOnSuspiciousPlatform = suspiciousPlatforms.some(p => domain.endsWith(p)) ? 1 : 0;
- 
-    // Typosquatting — lặp ký tự (liivee, rriive)
-    const hasRepeatedChars = /(.)\1{2,}/.test(domain) ? 1 : 0;
- 
-    // Domain toàn số
-    const isNumericDomain = /^\d+$/.test(domainMainPart) ? 1 : 0;
- 
-    // Chuỗi consonant vô nghĩa
-    const consonantGroups = (domain.match(/[bcdfghjklmnpqrstvwxyz]{4,}/gi) || []).length;
- 
-    // --- Structure ---
-    const isHTTPS = parsed.protocol === 'https:' ? 1 : 0;
-    const hasAt = atCount > 0 ? 1 : 0;
-    const hasPort = parsed.port !== '' ? 1 : 0;
-    const hasDoubleSlash = path.includes('//') ? 1 : 0;
-    const hasRedirectParam = /(url=|redirect=|next=|goto=)/i.test(query) ? 1 : 0;
- 
-    return {
-        urlLength, domainLength, pathLength,
-        digitRatio, dotCount, domainDashCount, underscoreCount,
-        queryParamCount, encodedCharCount, subdomainCount,
-        hasSuspiciousTLD, isIP, brandInSubdomain, brandDotCom,
-        hasSuspiciousWord, isOnSuspiciousPlatform,
-        hasRepeatedChars, isNumericDomain, consonantGroups,
-        isHTTPS, hasAt, hasPort, hasDoubleSlash, hasRedirectParam
-    };
-}
-
-function extractMLFeatures(url) {
-    let parsed;
-    try { parsed = new URL(url.trim()); }
-    catch { return null; }
- 
-    const domain = parsed.hostname || '';
-    if (!domain) return null;
- 
-    const normalized = url.trim();
-    const length = Math.max(normalized.length, 1);
-    const path = parsed.pathname || '';
-    const query = parsed.search ? parsed.search.substring(1) : ''; // bỏ dấu ?
- 
-    // --- Lexical ---
-    const urlLength = normalized.length;
-    const domainLength = domain.length;
-    const isIP = /^(\d+\.){3}\d+$/.test(domain) ? 1 : 0;
-    const tld = domain.includes('.') ? domain.split('.').pop().toLowerCase() : '';
-    const tldLength = tld.length;
-    const subdomains = domain.split('.');
-    const subdomainCount = Math.max(subdomains.length - 2, 0);
-    const letters = (normalized.match(/[A-Za-z]/g) || []).length;
-    const digits = (normalized.match(/\d/g) || []).length;
-    const equals = (normalized.match(/=/g) || []).length;
-    const qmarks = (normalized.match(/\?/g) || []).length;
-    const ampersands = (normalized.match(/&/g) || []).length;
-    const otherSpecials = (normalized.match(/[!@#$%^&*()_+\[\]{}|;:,<>`~\"\']/g) || []).length;
-    const spacialRatio = (length - letters - digits) / length;
-    const isHTTPS = parsed.protocol === 'https:' ? 1 : 0;
- 
-    // --- Entropy ---
-    const counts = {};
-    for (const c of normalized.toLowerCase()) {
-        counts[c] = (counts[c] || 0) + 1;
+function modelCard(title, modelResult) {
+    if (!modelResult) {
+        return `<div class="model-card"><span>${title}</span><strong>Không có dữ liệu</strong></div>`;
     }
-    const entropy = -Object.values(counts).reduce((sum, v) => {
-        const p = v / length;
-        return sum + p * Math.log2(p);
-    }, 0);
- 
-    // --- Obfuscation (chỉ trong path) ---
-    const encodedMatches = path.match(/%[0-9a-fA-F]{2}/g) || [];
-    const noObfuscated = encodedMatches.length;
-    const hasObfuscation = noObfuscated > 0 ? 1 : 0;
-    const obfuscationRatio = noObfuscated / length;
- 
-    // --- Keyword ---
-    const keywordText = `${domain} ${path} ${query}`.toLowerCase();
-    const bank = keywordText.includes('bank') ? 1 : 0;
-    const pay = keywordText.includes('pay') ? 1 : 0;
-    const crypto = /crypto|bitcoin|wallet/.test(keywordText) ? 1 : 0;
-    const suspiciousWords = ['login', 'secure', 'verify', 'update', 'confirm', 'signin'];
-    const hasSuspiciousWord = suspiciousWords.some(w => domain.toLowerCase().includes(w)) ? 1 : 0;
- 
-    // --- Domain pattern ---
-    const suspiciousTLDs = new Set([
-        'tk','ml','ga','cf','gq','xyz','top','club',
-        'sbs','cfd','click','casa','vip','love','ink','lk','cn','ru','bz'
-    ]);
-    const hasSuspiciousTLD = suspiciousTLDs.has(tld) ? 1 : 0;
-    const domainDashCount = (domain.match(/-/g) || []).length;
-    const hasRepeatedChars = /(.)\1{2,}/.test(domain) ? 1 : 0;
-    const domainMain = subdomains.length >= 2 ? subdomains[subdomains.length - 2] : '';
-    const isNumericDomain = /^\d+$/.test(domainMain) ? 1 : 0;
- 
-    const brands = ['paypal','google','facebook','meta','apple','amazon',
-                    'microsoft','bank','roblox','ledger','trezor','binance',
-                    'netflix','instagram','steam','spotify'];
-    const brandInSubdomain = (subdomainCount > 0 && brands.some(b => subdomains[0].toLowerCase().includes(b))) ? 1 : 0;
-    const brandDotCom = brands.some(b => domain.toLowerCase().includes(b + '.com.')) ? 1 : 0;
-    const consonantGroups = (domain.toLowerCase().match(/[bcdfghjklmnpqrstvwxyz]{4,}/g) || []).length;
- 
-    const suspiciousPlatforms = [
-        'pages.dev','vercel.app','replit.app','netlify.app',
-        'github.io','blogspot.com','weebly.com','surge.sh',
-        'workers.dev','framer.website','framer.app','glitch.me'
-    ];
-    const isOnSuspiciousPlatform = suspiciousPlatforms.some(p => domain.endsWith(p)) ? 1 : 0;
- 
-    // --- Structure ---
-    const hasAt = normalized.includes('@') ? 1 : 0;
-    const hasPort = parsed.port !== '' ? 1 : 0;
-    const hasDoubleSlash = path.includes('//') ? 1 : 0;
-    const hasRedirectParam = /(url=|redirect=|next=|goto=)/i.test(query) ? 1 : 0;
- 
-    // Trả về array đúng thứ tự FEATURE_NAMES
-    return [
-        urlLength, domainLength, isIP, tldLength,
-        subdomainCount, letters, letters/length,
-        digits, digits/length, equals,
-        qmarks, ampersands, otherSpecials,
-        spacialRatio, isHTTPS,
- 
-        entropy,
- 
-        hasObfuscation, noObfuscated, obfuscationRatio,
- 
-        bank, pay, crypto, hasSuspiciousWord,
- 
-        hasSuspiciousTLD, domainDashCount, hasRepeatedChars,
-        isNumericDomain, brandInSubdomain, brandDotCom,
-        consonantGroups, isOnSuspiciousPlatform,
- 
-        hasAt, hasPort, hasDoubleSlash, hasRedirectParam,
-    ];
+    return `
+        <div class="model-card">
+            <span>${title}</span>
+            <strong>${modelResult.name}</strong>
+            <small>Nguy hiểm ${(modelResult.probPhishing * 100).toFixed(1)}% · An toàn ${(modelResult.probSafe * 100).toFixed(1)}%</small>
+        </div>
+    `;
+}
+
+function escapeHTML(value) {
+    return String(value).replace(/[&<>'"]/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    }[character]));
 }

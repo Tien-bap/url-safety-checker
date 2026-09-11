@@ -1,0 +1,68 @@
+
+Tổng số dòng: 1836501
+Tổng số apex domain duy nhất: 1498171
+Số apex bị trùng giữa train/test (phải = 0): 0
+Train label distribution:
+label
+1    0.675948
+0    0.324052
+Name: proportion, dtype: float64
+Test label distribution:
+label
+1    0.671022
+0    0.328978
+Name: proportion, dtype: float64
+
+scale_pos_weight (tính trên train set): 0.4794
+Features: 26 — ['DomainLength', 'SuffixLength', 'NoOfSubdomainLevels', 'RegisteredDomainLength', 'DashCount', 'UnderscoreCount', 'DigitRatioInRegisteredDomain', 'DigitCountInRegisteredDomain', 'EntropyRegisteredDomain', 'EntropySubdomainPrefix', 'VowelRatioRegisteredDomain', 'ConsonantGroupCount', 'LongestWordLength', 'TokenCount', 'BrandSubstringInSubdomain', 'BrandWordBoundaryInSubdomain', 'BrandSubstringInRegisteredDomain', 'BrandWordBoundaryInRegisteredDomain', 'MinBrandLevenshteinDistanceNormalized', 'HasSuspiciousTLD', 'HasSuspiciousWord', 'HasFinancialWord', 'IsOnKnownPlatformSuffix', 'IsIP', 'HasPunycode', 'IsNumericRegisteredDomain']
+
+
+==================================================
+CLASSIFICATION REPORT (group split theo apex domain)
+==================================================
+              precision    recall  f1-score   support
+
+    Phishing       0.70      0.70      0.70    122905
+        Safe       0.85      0.85      0.85    250691
+
+    accuracy                           0.80    373596
+   macro avg       0.77      0.77      0.77    373596
+weighted avg       0.80      0.80      0.80    373596
+
+==================================================
+CONFUSION MATRIX
+==================================================
+                Predicted Phishing  Predicted Safe
+Actual Phishing 85750                37155
+Actual Safe     37605                213086
+
+ROC AUC Score: 0.8526
+==================================================
+FEATURE IMPORTANCE
+==================================================
+EntropySubdomainPrefix              0.1331 █████████████
+EntropyRegisteredDomain             0.1320 █████████████
+VowelRatioRegisteredDomain          0.1045 ██████████
+MinBrandLevenshteinDistanceNormalized 0.1033 ██████████
+DomainLength                        0.0840 ████████
+SuffixLength                        0.0759 ███████
+LongestWordLength                   0.0690 ██████
+RegisteredDomainLength              0.0667 ██████
+DigitRatioInRegisteredDomain        0.0520 █████
+NoOfSubdomainLevels                 0.0302 ███
+HasSuspiciousTLD                    0.0217 ██
+DashCount                           0.0211 ██
+ConsonantGroupCount                 0.0175 █
+TokenCount                          0.0173 █
+HasSuspiciousWord                   0.0148 █
+HasFinancialWord                    0.0147 █
+DigitCountInRegisteredDomain        0.0137 █
+IsOnKnownPlatformSuffix             0.0114 █
+BrandSubstringInSubdomain           0.0063 
+BrandSubstringInRegisteredDomain    0.0055 
+HasPunycode                         0.0021 
+BrandWordBoundaryInSubdomain        0.0016 
+UnderscoreCount                     0.0010 
+BrandWordBoundaryInRegisteredDomain 0.0007 
+IsIP                                0.0000 
+IsNumericRegisteredDomain           0.0000 
