@@ -119,17 +119,18 @@ function pslExtract(hostname) {
     if (labels.length === 0) return { suffix: '', registeredDomain: '', subdomainPrefix: '' };
     if (labels.length === 1) return { suffix: '', registeredDomain: labels[0], subdomainPrefix: '' };
 
-    // Kiểm tra suffix 2 nhãn cuối (vd co.uk, com.vn)
     const lastTwo = labels.slice(-2).join('.');
+
+    // Gộp cả suffix quốc gia (co.uk...) VÀ platform suffix (github.io, vercel.app...)
+    // vì cả 2 loại đều là suffix 2 nhãn thật trong PSL
     let suffixLabelCount;
-    if (MULTI_LABEL_SUFFIXES.has(lastTwo)) {
+    if (MULTI_LABEL_SUFFIXES.has(lastTwo) || KNOWN_PLATFORM_SUFFIXES.has(lastTwo)) {
         suffixLabelCount = 2;
     } else {
-        suffixLabelCount = 1; // mặc định suffix 1 nhãn (com, net, org, io, dev...)
+        suffixLabelCount = 1;
     }
 
     if (labels.length <= suffixLabelCount) {
-        // toàn bộ hostname là suffix, không có registered domain rõ ràng
         return { suffix: labels.join('.'), registeredDomain: '', subdomainPrefix: '' };
     }
 

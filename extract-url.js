@@ -93,7 +93,15 @@ function urlPslExtract(hostname) {
     if (labels.length === 1) return { suffix: '', registeredDomain: labels[0], subdomainPrefix: '' };
 
     const lastTwo = labels.slice(-2).join('.');
-    const suffixLabelCount = URL_MULTI_LABEL_SUFFIXES.has(lastTwo) ? 2 : 1;
+
+    // Gộp cả suffix quốc gia (co.uk...) VÀ platform suffix (github.io, vercel.app...)
+    // vì cả 2 loại đều là suffix 2 nhãn thật trong PSL
+    let suffixLabelCount;
+    if (MULTI_LABEL_SUFFIXES.has(lastTwo) || KNOWN_PLATFORM_SUFFIXES.has(lastTwo)) {
+        suffixLabelCount = 2;
+    } else {
+        suffixLabelCount = 1;
+    }
 
     if (labels.length <= suffixLabelCount) {
         return { suffix: labels.join('.'), registeredDomain: '', subdomainPrefix: '' };
