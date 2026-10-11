@@ -72,6 +72,16 @@ Domain model thấp hơn URL model vì chỉ nhìn hostname, không có context 
 
 ## Nguồn dữ liệu
 
+### Dataset chính thức (final)
+
+Bộ final gồm cả bản raw và bản đã trích xuất feature cho hai model:
+
+- Domain: `raw_domains_augmented.csv` và `dataset_domain_augmented.csv`.
+- URL: `raw_urls_with_domain_v3.csv` và `dataset_url_with_domain.csv`.
+
+Xem [tài liệu dataset](ML/dataset/README.md) để biết số dòng, phân bố nhãn và pipeline; [manifest](ML/dataset/manifest.json) lưu schema và SHA-256 của bốn file.
+
+
 **Domain dataset**: PhiUSIIL, OpenPhish, URLhaus, Phishing.Database, và benign domain (Tranco/GitHub Pages) được augment thêm subdomain phổ biến (`login`, `secure`, `api`, `mail`...).
 
 **URL dataset**: PhiUSIIL, OpenPhish, URLhaus, Phishing.Database, `balanced_urls.csv`, `malicious_phish.csv` (bỏ nhãn `defacement`).

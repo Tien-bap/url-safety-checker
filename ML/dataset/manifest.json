@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "labels": {
+    "0": "Phishing",
+    "1": "Safe"
+  },
+  "datasets": [
+    {
+      "model": "domain",
+      "kind": "raw",
+      "path": "raw_domains_augmented.csv",
+      "rows": 1839507,
+      "columns": [
+        "domain",
+        "label"
+      ],
+      "label_counts": {
+        "0": 599897,
+        "1": 1239610
+      },
+      "size_bytes": 41849110,
+      "sha256": "c3a2c43f5f14a8bfb6b8a20cca7fe88d292a513ddcf6e4b0b81656cd3e3eecca"
+    },
+    {
+      "model": "domain",
+      "kind": "features",
+      "path": "dataset_domain_augmented.csv",
+      "rows": 1836501,
+      "columns": [
+        "domain",
+        "DomainLength",
+        "SuffixLength",
+        "NoOfSubdomainLevels",
+        "RegisteredDomainLength",
+        "DashCount",
+        "UnderscoreCount",
+        "DigitRatioInRegisteredDomain",
+        "DigitCountInRegisteredDomain",
+        "EntropyRegisteredDomain",
+        "EntropySubdomainPrefix",
+        "VowelRatioRegisteredDomain",
+        "ConsonantGroupCount",
+        "LongestWordLength",
+        "TokenCount",
+        "BrandSubstringInSubdomain",
+        "BrandWordBoundaryInSubdomain",
+        "BrandSubstringInRegisteredDomain",
+        "BrandWordBoundaryInRegisteredDomain",
+        "MinBrandLevenshteinDistanceNormalized",
+        "HasSuspiciousTLD",
+        "HasSuspiciousWord",
+        "HasFinancialWord",
+        "IsOnKnownPlatformSuffix",
+        "IsIP",
+        "HasPunycode",
+        "IsNumericRegisteredDomain",
+        "label"
+      ],
+      "label_counts": {
+        "0": 596962,
+        "1": 1239539
+      },
+      "size_bytes": 224780207,
+      "sha256": "99a199db6afb3870f0e3485a6edbd4c3c67f9ea2e4514170675ca7fd27a05e81"
+    },
+    {
+      "model": "url",
+      "kind": "raw",
+      "path": "raw_urls_with_domain_v3.csv",
+      "rows": 2194923,
+      "columns": [
+        "url",
+        "domain",
+        "label"
+      ],
+      "label_counts": {
+        "0": 1316060,
+        "1": 878863
+      },
+      "size_bytes": 195554596,
+      "sha256": "a0d58ac951ab7527dfd688251009dbdd129c3c8ca191122843cc68bf54d19331"
+    },
+    {
+      "model": "url",
+      "kind": "features",
+      "path": "dataset_url_with_domain.csv",
+      "rows": 2194913,
+      "columns": [
+        "domain",
+        "URLLength",
+        "DomainLength",
+        "IsDomainIP",
+        "SuffixLength",
+        "NoOfSubDomain",
+        "NoOfLettersInURL",
+        "LetterRatioInURL",
+        "NoOfDegitsInURL",
+        "DegitRatioInURL",
+        "NoOfEqualsInURL",
+        "NoOfQMarkInURL",
+        "NoOfAmpersandInURL",
+        "NoOfOtherSpecialCharsInURL",
+        "SpacialCharRatioInURL",
+        "IsHTTPS",
+        "Entropy",
+        "EntropyRegisteredDomain",
+        "HasObfuscation",
+        "NoOfObfuscatedChar",
+        "ObfuscationRatio",
+        "Bank",
+        "Pay",
+        "Crypto",
+        "HasSuspiciousWord",
+        "HasSuspiciousTLD",
+        "DomainDashCount",
+        "HasRepeatedChars",
+        "IsNumericDomain",
+        "BrandSubstringInSubdomain",
+        "BrandWordBoundaryInSubdomain",
+        "BrandSubstringInRegisteredDomain",
+        "BrandWordBoundaryInRegisteredDomain",
+        "MinBrandLevenshteinDistanceNormalized",
+        "ConsonantGroups",
+        "IsOnSuspiciousPlatform",
+        "IsTrustedSuffix",
+        "HasAt",
+        "HasPort",
+        "HasDoubleSlash",
+        "HasRedirectParam",
+        "label"
+      ],
+      "label_counts": {
+        "0": 1316055,
+        "1": 878858
+      },
+      "size_bytes": 416301210,
+      "sha256": "1ff80491ca5e5fb29615fb8596f505fc5b10a6f60a804ab45aec295e12518ba5"
+    }
+  ]
+}
